@@ -1,9 +1,21 @@
 {
-  "name": "alexa-facts",
-  "description": "Example Amazon Alexa skill built with the Amazon Alexa Skills SDK.",
+  "name": "slf-skill",
+  "description": "Stadt-Land-Fluss - Alexa Edition",
   "version": "0.0.1",
   "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "alexa",
+    "skill",
+    "stadt land fluss"
+  ],
+  "author": "Stephan Klein, Monica Cismasiu",
+  "license": "SEE LICENSE IN LICENSE.TXT",
   "dependencies": {
-    "alexa-sdk": "^1.0.6"
+    "ask-sdk": "^2.0.0",
+    "i18next": "^10.6.0",
+    "i18next-sprintf-postprocessor": "^0.2.2"
   }
 }

@@ -1,133 +1,402 @@
 /* eslint-disable  func-names */
-/* eslint quote-props: ["error", "consistent"]*/
-/**
- * This sample demonstrates a simple skill built with the Amazon Alexa Skills
- * nodejs skill development kit.
- * This sample supports multiple lauguages. (en-US, en-GB, de-DE).
- * The Intent Schema, Custom Slots and Sample Utterances for this skill, as well
- * as testing instructions are located at https://github.com/alexa/skill-sample-nodejs-fact
- **/
+/* eslint-disable  no-console */
 
-'use strict';
+const Alexa = require('ask-sdk-core');
+const countries = require('./countries');
+const i18n = require('i18next');
+const sprintf = require('i18next-sprintf-postprocessor');
 
-const Alexa = require('alexa-sdk');
+const ANSWER_COUNT = 4;
+const GAME_LENGTH = 5;
+const players = ["Moni", "Stephan"];
 
-const APP_ID = undefined;  // TODO replace with your app ID (OPTIONAL).
+var letter;
 
-const languageStrings = {
-    'en-GB': {
+function getRandomLetter(category) {
+    let letterArr = null;
+
+    while (letterArr == null) {
+        let letter = String.fromCharCode(
+            Math.floor(Math.random() * 26) + 97
+        );
+
+        let letterArr = category.DE_DE[letter];
+        console.log("letterArr for letter:" + letter + " = " + letterArr);
+    }
+
+    return letter.toUpperCase();
+}
+
+function startGame(newGame, handlerInput) {
+    const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+    letter = getRandomLetter(countries);
+
+    let speechOutput = newGame
+        ? requestAttributes.t('NEW_GAME_MESSAGE', requestAttributes.t('GAME_NAME'))
+        + requestAttributes.t('WELCOME_MESSAGE', letter, players[0])
+        : '';
+
+    const sessionAttributes = {};
+    let repromptText = speechOutput;
+
+    Object.assign(sessionAttributes, {
+        speechOutput: repromptText,
+        repromptText,
+        score: 0
+    });
+
+    handlerInput.attributesManager.setSessionAttributes(sessionAttributes);
+
+    return handlerInput.responseBuilder
+        .speak(speechOutput)
+        .reprompt(repromptText)
+        .withSimpleCard(requestAttributes.t('GAME_NAME'), repromptText)
+        .getResponse();
+}
+
+function isAnswerSlotValid(intent, letter) {
+    console.log('start validating');
+    const answerSlotFilled = intent
+        && intent.slots
+        && intent.slots.Answer
+        && intent.slots.Answer.value;
+
+    if (!answerSlotFilled)
+        return false;
+
+    let answer = intent.slots.Answer.value;
+
+    console.log('validating' + answer + ', ' + answer.charAt(0));
+
+    console.log(letter);
+    let letterArr = countries.DE_DE[letter];
+    console.log(letterArr);
+    let normAnswer = answer.charAt(0).toUpperCase() + answer.substring(1).toLowerCase();
+
+    console.log(normAnswer);
+
+    let validResult = letterArr.includes(normAnswer);
+
+    return answerSlotFilled
+        && intent.slots.Answer.value.charAt(0).toUpperCase() === letter
+        && validResult;
+}
+
+function handleUserGuess(userGaveUp, handlerInput) {
+    const {requestEnvelope, attributesManager, responseBuilder} = handlerInput;
+    const {intent} = requestEnvelope.request;
+
+    const answerSlotValid = isAnswerSlotValid(intent, letter);
+
+    let speechOutput = '';
+    let speechOutputAnalysis = '';
+
+    const sessionAttributes = attributesManager.getSessionAttributes();
+    let currentScore = parseInt(sessionAttributes.score, 10);
+    const {correctAnswerText} = sessionAttributes;
+    const requestAttributes = attributesManager.getRequestAttributes();
+
+    if (answerSlotValid) {
+        currentScore += 1;
+        speechOutputAnalysis = requestAttributes.t('ANSWER_CORRECT_MESSAGE');
+    } else {
+        if (!userGaveUp) {
+            speechOutputAnalysis = requestAttributes.t('ANSWER_WRONG_MESSAGE');
+        }
+    }
+
+    speechOutput = speechOutputAnalysis
+    speechOutput += requestAttributes.t(
+        'NEXT_PLAYER'
+    );
+
+    let repromptText = speechOutput
+
+    Object.assign(sessionAttributes, {
+        speechOutput: repromptText,
+        repromptText,
+        score: currentScore
+    });
+
+    return responseBuilder.speak(speechOutput)
+        .reprompt(repromptText)
+        .withSimpleCard(requestAttributes.t('GAME_NAME'), repromptText)
+        .getResponse();
+}
+
+
+function helpTheUser(newGame, handlerInput) {
+    const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+    const askMessage = newGame
+        ? requestAttributes.t('ASK_MESSAGE_START')
+        : requestAttributes.t('REPEAT_QUESTION_MESSAGE') + requestAttributes.t('STOP_MESSAGE');
+    const speechOutput = requestAttributes.t('HELP_MESSAGE', GAME_LENGTH) + askMessage;
+    const repromptText = requestAttributes.t('HELP_REPROMPT') + askMessage;
+
+    return handlerInput.responseBuilder.speak(speechOutput).reprompt(repromptText).getResponse();
+}
+
+/* jshint -W101 */
+const languageString = {
+    en: {
         translation: {
-            FACTS: [
-                'A year on Mercury is just 88 days long.',
-                'Despite being farther from the Sun, Venus experiences higher temperatures than Mercury.',
-                'Venus rotates anti-clockwise, possibly because of a collision in the past with an asteroid.',
-                'On Mars, the Sun appears about half the size as it does on Earth.',
-                'Earth is the only planet not named after a god.',
-                'Jupiter has the shortest day of all the planets.',
-                'The Milky Way galaxy will collide with the Andromeda Galaxy in about 5 billion years.',
-                'The Sun contains 99.86% of the mass in the Solar System.',
-                'The Sun is an almost perfect sphere.',
-                'A total solar eclipse can happen once every 1 to 2 years. This makes them a rare event.',
-                'Saturn radiates two and a half times more energy into space than it receives from the Sun.',
-                'The temperature inside the Sun can reach 15 million degrees Celsius.',
-                'The Moon is moving approximately 3.8 cm away from our planet every year.',
-            ],
-            SKILL_NAME: 'British Space Facts',
-            GET_FACT_MESSAGE: "Here's your fact: ",
-            HELP_MESSAGE: 'You can say tell me a space fact, or, you can say exit... What can I help you with?',
-            HELP_REPROMPT: 'What can I help you with?',
-            STOP_MESSAGE: 'Goodbye!',
+            QUESTIONS: questions.QUESTIONS_EN_US,
+            GAME_NAME: 'Reindeer Trivia',
+            HELP_MESSAGE: 'I will ask you %s multiple choice questions. Respond with the number of the answer. For example, say one, two, three, or four. To start a new game at any time, say, start game. ',
+            REPEAT_QUESTION_MESSAGE: 'To repeat the last question, say, repeat. ',
+            ASK_MESSAGE_START: 'Would you like to start playing?',
+            HELP_REPROMPT: 'To give an answer to a question, respond with the number of the answer. ',
+            STOP_MESSAGE: 'Would you like to keep playing?',
+            CANCEL_MESSAGE: 'Ok, let\'s play again soon.',
+            NO_MESSAGE: 'Ok, we\'ll play another time. Goodbye!',
+            TRIVIA_UNHANDLED: 'Try saying a number between 1 and %s',
+            HELP_UNHANDLED: 'Say yes to continue, or no to end the game.',
+            START_UNHANDLED: 'Say start to start a new game.',
+            NEW_GAME_MESSAGE: 'Welcome to %s. ',
+            WELCOME_MESSAGE: 'I will ask you %s questions, try to get as many right as you can. Just say the number of the answer. Let\'s begin. ',
+            ANSWER_CORRECT_MESSAGE: 'correct. ',
+            ANSWER_WRONG_MESSAGE: 'wrong. ',
+            CORRECT_ANSWER_MESSAGE: 'The correct answer is %s: %s. ',
+            ANSWER_IS_MESSAGE: 'That answer is ',
+            TELL_QUESTION_MESSAGE: 'Question %s. %s ',
+            GAME_OVER_MESSAGE: 'You got %s out of %s questions correct. Thank you for playing!',
+            SCORE_IS_MESSAGE: 'Your score is %s. ',
+            NEXT_PLAYER: ''
         },
     },
     'en-US': {
         translation: {
-            FACTS: [
-                'A year on Mercury is just 88 days long.',
-                'Despite being farther from the Sun, Venus experiences higher temperatures than Mercury.',
-                'Venus rotates counter-clockwise, possibly because of a collision in the past with an asteroid.',
-                'On Mars, the Sun appears about half the size as it does on Earth.',
-                'Earth is the only planet not named after a god.',
-                'Jupiter has the shortest day of all the planets.',
-                'The Milky Way galaxy will collide with the Andromeda Galaxy in about 5 billion years.',
-                'The Sun contains 99.86% of the mass in the Solar System.',
-                'The Sun is an almost perfect sphere.',
-                'A total solar eclipse can happen once every 1 to 2 years. This makes them a rare event.',
-                'Saturn radiates two and a half times more energy into space than it receives from the sun.',
-                'The temperature inside the Sun can reach 15 million degrees Celsius.',
-                'The Moon is moving approximately 3.8 cm away from our planet every year.',
-            ],
-            SKILL_NAME: 'American Space Facts',
-            GET_FACT_MESSAGE: "Here's your fact: ",
-            HELP_MESSAGE: 'You can say tell me a space fact, or, you can say exit... What can I help you with?',
-            HELP_REPROMPT: 'What can I help you with?',
-            STOP_MESSAGE: 'Goodbye!',
+            QUESTIONS: questions.QUESTIONS_EN_US,
+            GAME_NAME: 'American Reindeer Trivia'
         },
     },
-    'de-DE': {
+    'en-GB': {
         translation: {
-            FACTS: [
-                'Ein Jahr dauert auf dem Merkur nur 88 Tage.',
-                'Die Venus ist zwar weiter von der Sonne entfernt, hat aber höhere Temperaturen als Merkur.',
-                'Venus dreht sich entgegen dem Uhrzeigersinn, möglicherweise aufgrund eines früheren Zusammenstoßes mit einem Asteroiden.',
-                'Auf dem Mars erscheint die Sonne nur halb so groß wie auf der Erde.',
-                'Die Erde ist der einzige Planet, der nicht nach einem Gott benannt ist.',
-                'Jupiter hat den kürzesten Tag aller Planeten.',
-                'Die Milchstraßengalaxis wird in etwa 5 Milliarden Jahren mit der Andromeda-Galaxis zusammenstoßen.',
-                'Die Sonne macht rund 99,86 % der Masse im Sonnensystem aus.',
-                'Die Sonne ist eine fast perfekte Kugel.',
-                'Eine Sonnenfinsternis kann alle ein bis zwei Jahre eintreten. Sie ist daher ein seltenes Ereignis.',
-                'Der Saturn strahlt zweieinhalb mal mehr Energie in den Weltraum aus als er von der Sonne erhält.',
-                'Die Temperatur in der Sonne kann 15 Millionen Grad Celsius erreichen.',
-                'Der Mond entfernt sich von unserem Planeten etwa 3,8 cm pro Jahr.',
-            ],
-            SKILL_NAME: 'Weltraumwissen auf Deutsch',
-            GET_FACT_MESSAGE: 'Hier sind deine Fakten: ',
-            HELP_MESSAGE: 'Du kannst sagen, „Nenne mir einen Fakt über den Weltraum“, oder du kannst „Beenden“ sagen... Wie kann ich dir helfen?',
-            HELP_REPROMPT: 'Wie kann ich dir helfen?',
-            STOP_MESSAGE: 'Auf Wiedersehen!',
+            QUESTIONS: questions.QUESTIONS_EN_GB,
+            GAME_NAME: 'British Reindeer Trivia'
+        },
+    },
+    de: {
+        translation: {
+            QUESTIONS: questions.QUESTIONS_DE_DE,
+            GAME_NAME: 'Moni versus Stephan',
+            HELP_MESSAGE: 'Ich stelle dir %s Multiple-Choice-Fragen. Antworte mit der Zahl, die zur richtigen Antwort gehört. Sage beispielsweise eins, zwei, drei oder vier. Du kannst jederzeit ein neues Spiel beginnen, sage einfach „Spiel starten“. ',
+            REPEAT_QUESTION_MESSAGE: 'Wenn die letzte Frage wiederholt werden soll, sage „Wiederholen“ ',
+            ASK_MESSAGE_START: 'Möchten Sie beginnen?',
+            HELP_REPROMPT: 'Wenn du eine Frage beantworten willst, antworte mit der Zahl, die zur richtigen Antwort gehört. ',
+            STOP_MESSAGE: 'Möchtest du weiterspielen?',
+            CANCEL_MESSAGE: 'OK, dann lass uns bald mal wieder spielen.',
+            NO_MESSAGE: 'OK, spielen wir ein andermal. Auf Wiedersehen!',
+            TRIVIA_UNHANDLED: 'Sagt eine Zahl beispielsweise zwischen 1 und %s',
+            HELP_UNHANDLED: 'Sage ja, um fortzufahren, oder nein, um das Spiel zu beenden.',
+            START_UNHANDLED: 'Du kannst jederzeit ein neues Spiel beginnen, sage einfach „Spiel starten“.',
+            NEW_GAME_MESSAGE: 'Willkommen bei %s. ',
+            WELCOME_MESSAGE: 'Nenne Länder mit dem Anfangsbuchstaben %s. %s beginnt.',
+            ANSWER_WRONG_MESSAGE: 'Falsch. ',
+            CORRECT_ANSWER_MESSAGE: 'Die richtige Antwort ist %s: %s. ',
+            ANSWER_IS_MESSAGE: 'Diese Antwort ist ',
+            TELL_QUESTION_MESSAGE: 'Frage %s. %s ',
+            GAME_OVER_MESSAGE: 'Du hast %s von %s richtig beantwortet. Danke fürs Mitspielen!',
+            SCORE_IS_MESSAGE: 'Dein Ergebnis ist %s. ',
+            NEXT_PLAYER: 'Spieler'
         },
     },
 };
 
-const handlers = {
-    'LaunchRequest': function () {
-        this.emit('GetFact');
-    },
-    'GetNewFactIntent': function () {
-        this.emit('GetFact');
-    },
-    'GetFact': function () {
-        // Get a random space fact from the space facts list
-        // Use this.t() to get corresponding language data
-        const factArr = this.t('FACTS');
-        const factIndex = Math.floor(Math.random() * factArr.length);
-        const randomFact = factArr[factIndex];
 
-        // Create speech output
-        const speechOutput = this.t('GET_FACT_MESSAGE') + randomFact;
-        this.emit(':tellWithCard', speechOutput, this.t('SKILL_NAME'), randomFact);
-    },
-    'AMAZON.HelpIntent': function () {
-        const speechOutput = this.t('HELP_MESSAGE');
-        const reprompt = this.t('HELP_MESSAGE');
-        this.emit(':ask', speechOutput, reprompt);
-    },
-    'AMAZON.CancelIntent': function () {
-        this.emit(':tell', this.t('STOP_MESSAGE'));
-    },
-    'AMAZON.StopIntent': function () {
-        this.emit(':tell', this.t('STOP_MESSAGE'));
-    },
-    'SessionEndedRequest': function () {
-        this.emit(':tell', this.t('STOP_MESSAGE'));
+const LocalizationInterceptor = {
+    process(handlerInput) {
+        const localizationClient = i18n.use(sprintf).init({
+            lng: handlerInput.requestEnvelope.request.locale,
+            overloadTranslationOptionHandler: sprintf.overloadTranslationOptionHandler,
+            resources: languageString,
+            returnObjects: true
+        });
+
+        const attributes = handlerInput.attributesManager.getRequestAttributes();
+        attributes.t = function (...args) {
+            return localizationClient.t(...args);
+        };
     },
 };
 
-exports.handler = (event, context) => {
-    const alexa = Alexa.handler(event, context);
-    alexa.APP_ID = APP_ID;
-    // To enable string internationalization (i18n) features, set a resources object.
-    alexa.resources = languageStrings;
-    alexa.registerHandlers(handlers);
-    alexa.execute();
+const LaunchRequest = {
+    canHandle(handlerInput) {
+        const {request} = handlerInput.requestEnvelope;
+
+        return request.type === 'LaunchRequest'
+            || (request.type === 'IntentRequest'
+                && request.intent.name === 'AMAZON.StartOverIntent');
+    },
+    handle(handlerInput) {
+        return startGame(true, handlerInput);
+    },
 };
+
+
+const HelpIntent = {
+    canHandle(handlerInput) {
+        const {request} = handlerInput.requestEnvelope;
+
+        return request.type === 'IntentRequest' && request.intent.name === 'AMAZON.HelpIntent';
+    },
+    handle(handlerInput) {
+        const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
+
+        const newGame = !(sessionAttributes.questions);
+        return helpTheUser(newGame, handlerInput);
+    },
+};
+
+const UnhandledIntent = {
+    canHandle() {
+        return true;
+    },
+    handle(handlerInput) {
+        const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
+        const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+        if (Object.keys(sessionAttributes).length === 0) {
+            const speechOutput = requestAttributes.t('START_UNHANDLED');
+            return handlerInput.attributesManager
+                .speak(speechOutput)
+                .reprompt(speechOutput)
+                .getResponse();
+        } else if (sessionAttributes.questions) {
+            const speechOutput = requestAttributes.t('TRIVIA_UNHANDLED', ANSWER_COUNT.toString());
+            return handlerInput.attributesManager
+                .speak(speechOutput)
+                .reprompt(speechOutput)
+                .getResponse();
+        }
+        const speechOutput = requestAttributes.t('HELP_UNHANDLED');
+        return handlerInput.attributesManager.speak(speechOutput).reprompt(speechOutput).getResponse();
+    },
+};
+
+const SessionEndedRequest = {
+    canHandle(handlerInput) {
+        return handlerInput.requestEnvelope.request.type === 'SessionEndedRequest';
+    },
+    handle(handlerInput) {
+        console.log(`Session ended with reason: ${handlerInput.requestEnvelope.request.reason}`);
+
+        return handlerInput.responseBuilder.getResponse();
+    },
+};
+
+const AnswerIntent = {
+    canHandle(handlerInput) {
+        return handlerInput.requestEnvelope.request.type === 'IntentRequest'
+            && (handlerInput.requestEnvelope.request.intent.name === 'AnswerIntent'
+                || handlerInput.requestEnvelope.request.intent.name === 'DontKnowIntent');
+    },
+    handle(handlerInput) {
+        if (handlerInput.requestEnvelope.request.intent.name === 'AnswerIntent') {
+            return handleUserGuess(false, handlerInput);
+        }
+        return handleUserGuess(true, handlerInput);
+    },
+};
+
+const RepeatIntent = {
+    canHandle(handlerInput) {
+        return handlerInput.requestEnvelope.request.type === 'IntentRequest'
+            && handlerInput.requestEnvelope.request.intent.name === 'AMAZON.RepeatIntent';
+    },
+    handle(handlerInput) {
+        const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
+        return handlerInput.responseBuilder.speak(sessionAttributes.speechOutput)
+            .reprompt(sessionAttributes.repromptText)
+            .getResponse();
+    },
+};
+
+const YesIntent = {
+    canHandle(handlerInput) {
+        return handlerInput.requestEnvelope.request.type === 'IntentRequest'
+            && handlerInput.requestEnvelope.request.intent.name === 'AMAZON.YesIntent';
+    },
+    handle(handlerInput) {
+        const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
+        if (sessionAttributes.questions) {
+            return handlerInput.responseBuilder.speak(sessionAttributes.speechOutput)
+                .reprompt(sessionAttributes.repromptText)
+                .getResponse();
+        }
+        return startGame(false, handlerInput);
+    },
+};
+
+
+const StopIntent = {
+    canHandle(handlerInput) {
+        return handlerInput.requestEnvelope.request.type === 'IntentRequest'
+            && handlerInput.requestEnvelope.request.intent.name === 'AMAZON.StopIntent';
+    },
+    handle(handlerInput) {
+        const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+        const speechOutput = requestAttributes.t('STOP_MESSAGE');
+
+        return handlerInput.responseBuilder.speak(speechOutput)
+            .reprompt(speechOutput)
+            .getResponse();
+    },
+};
+
+const CancelIntent = {
+    canHandle(handlerInput) {
+        return handlerInput.requestEnvelope.request.type === 'IntentRequest'
+            && handlerInput.requestEnvelope.request.intent.name === 'AMAZON.CancelIntent';
+    },
+    handle(handlerInput) {
+        const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+        const speechOutput = requestAttributes.t('CANCEL_MESSAGE');
+
+        return handlerInput.responseBuilder.speak(speechOutput)
+            .getResponse();
+    },
+};
+
+const NoIntent = {
+    canHandle(handlerInput) {
+        return handlerInput.requestEnvelope.request.type === 'IntentRequest'
+            && handlerInput.requestEnvelope.request.intent.name === 'AMAZON.NoIntent';
+    },
+    handle(handlerInput) {
+        const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+        const speechOutput = requestAttributes.t('NO_MESSAGE');
+        return handlerInput.responseBuilder.speak(speechOutput).getResponse();
+    },
+};
+
+const ErrorHandler = {
+    canHandle() {
+        return true;
+    },
+    handle(handlerInput, error) {
+        console.log(`Error handled: ${error.message}`);
+
+        return handlerInput.responseBuilder
+            .speak('Sorry, I can\'t understand the command. Please say again.')
+            .reprompt('Sorry, I can\'t understand the command. Please say again.')
+            .getResponse();
+    },
+};
+
+const skillBuilder = Alexa.SkillBuilders.custom();
+exports.handler = skillBuilder
+    .addRequestHandlers(
+        LaunchRequest,
+        HelpIntent,
+        AnswerIntent,
+        RepeatIntent,
+        YesIntent,
+        StopIntent,
+        CancelIntent,
+        NoIntent,
+        SessionEndedRequest,
+        UnhandledIntent
+    )
+    .addRequestInterceptors(LocalizationInterceptor)
+    .addErrorHandlers(ErrorHandler)
+    .lambda();
